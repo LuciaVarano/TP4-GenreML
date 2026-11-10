@@ -1,0 +1,6 @@
+streamlit
+altair>=5
+pandas
+numpy
+scipy
+scikit-learn
