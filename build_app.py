@@ -26,7 +26,7 @@ CSV = RAIZ / "genreML_tracks_latest.csv"            # la plata de la Entrega 1
 ART = RAIZ / "artefactos"                            # lo que deja entrenar.py
 SALIDA = RAIZ / "docs" / "index.html"                # GitHub Pages publica la carpeta /docs
 STREAMLIT_URL = os.environ.get("STREAMLIT_URL", "https://tp4-genreml-grupo2.streamlit.app/")   # <- poner la URL real
-FECHA_DATOS = "COMPLETAR: fecha del corte del CSV"   # <- poner la fecha del corte que bajó el pipeline
+FECHA_DATOS = "9 de Septiembre de 2026"   # <- poner la fecha del corte que bajó el pipeline
 N_PUNTOS = 20_000                                    # canciones que se dibujan en «Explorá» (sorteo con semilla 42)
 SEMILLA = 42
 
