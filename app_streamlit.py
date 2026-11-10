@@ -94,7 +94,7 @@ with der:
              f"géneros: no es otro modelo. En validación cruzada la familia más probable acierta el {r['accuracy']:.0%} de las canciones "
              f"(el piso, contestar siempre la familia más grande, es {r['piso']:.0%}).")
     barras_f = alt.Chart(fam).mark_bar(cornerRadiusEnd=4).encode(
-        y=alt.Y("familia:N", sort=fam.familia.tolist(), title=None),
+        y=alt.Y("familia:N", sort=fam.familia.tolist(), title=None, axis=alt.Axis(labelLimit=320)),
         x=alt.X("probabilidad:Q", axis=alt.Axis(format="%"), title="Probabilidad de la familia"),
         color=alt.condition(alt.datum.posicion == "1.º", alt.value(AZUL), alt.value(GRIS)),
         tooltip=[alt.Tooltip("familia:N", title="Familia"), alt.Tooltip("probabilidad:Q", title="Probabilidad", format=".1%")])
