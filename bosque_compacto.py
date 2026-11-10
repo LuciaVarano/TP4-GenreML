@@ -49,13 +49,17 @@ class BosqueCompacto:
     @classmethod
     def cargar(cls, ruta):
         z = np.load(ruta)
+        # Cada z["..."] descomprime el arreglo entero: se lee UNA vez. Y cada rebanada se COPIA: una rebanada sin copiar
+        # es una vista que mantiene vivo el arreglo completo, y con 100 árboles la memoria se multiplica por 100.
+        col, umbral, der = z["col"], z["umbral"], z["der"]
+        datos, indices, filas_todas = z["datos"], z["indices"], z["filas"]
         b, i, k = cls(int(z["n_clases"])), 0, 0
         for n in z["n_nodos"]:
-            filas = z["filas"][i:i + n].astype(np.int64)
+            filas = filas_todas[i:i + n].astype(np.int64)
             ptr = np.concatenate([[0], np.cumsum(filas)])
-            m = sparse.csr_matrix((z["datos"][k:k + ptr[-1]], z["indices"][k:k + ptr[-1]].astype(np.int32), ptr),
+            m = sparse.csr_matrix((datos[k:k + ptr[-1]].copy(), indices[k:k + ptr[-1]].astype(np.int32), ptr),
                                   shape=(n, b.n_clases))
-            b.arboles.append((z["col"][i:i + n], z["umbral"][i:i + n], z["der"][i:i + n], m))
+            b.arboles.append((col[i:i + n].copy(), umbral[i:i + n].copy(), der[i:i + n].copy(), m))
             i, k = i + n, k + ptr[-1]
         return b
 
