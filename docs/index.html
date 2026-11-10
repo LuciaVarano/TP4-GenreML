@@ -122,8 +122,10 @@ en naranja, la que se descartó.</p>
 <p>Pearson 0,759 y Spearman 0,753. Cada una explica el género por separado con η² de 0,468 y 0,458; combinadas, 0,483: una mejora de
 0,015, por debajo de la tolerancia de 0,02 fijada de antemano. Se puede prescindir de una sin perder información.</p>
 <h4>Una que no: <code>time_signature</code> ayuda a predecir el género (H4)</h4>
-<p>Partió en η² = 0,073 (amarillo) y al separar poblaciones bajó a 0,054 y después a 0,045 (rojo): el compás 4/4 domina en casi todos
-los géneros, y la hipótesis quedó refutada. En el gráfico de arriba, recalculado sobre las 89.741 canciones, da 0,073.</p>
+<p>Partió en η² = 0,073 (amarillo). Al separar poblaciones bajó a 0,054 (amarillo) con los 19 géneros que tienen al menos 20 % de
+canciones fuera de 4/4, y después a 0,045 (rojo) con los cinco de mayor proporción. El compás 4/4 domina en casi todos los géneros, y
+la hipótesis quedó refutada. En el gráfico de arriba, recalculado sobre las 89.741 canciones, da 0,073 (amarillo).</p>
+<p>El semáforo de η² se fijó antes de medir: rojo por debajo de 0,05, verde por encima de 0,25 y amarillo entre los dos.</p>
 <h4>Cómo se construyó el gráfico</h4>
 <p>η² es la suma de cuadrados entre géneros dividida por la suma de cuadrados total de cada columna. Para poder compararlas en un solo
 eje, <code>key</code>, <code>mode</code> y <code>time_signature</code> se tratan como números sólo en esta medida (en el modelo son categóricas).
