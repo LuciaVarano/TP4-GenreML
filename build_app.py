@@ -19,13 +19,14 @@ import altair as alt
 import numpy as np
 import pandas as pd
 
+from modelo_app import FAMILIAS, MAPA_K10, etiqueta_familia
+
 RAIZ = Path(__file__).parent
 CSV = RAIZ / "genreML_tracks_latest.csv"            # la plata de la Entrega 1
 ART = RAIZ / "artefactos"                            # lo que deja entrenar.py
 SALIDA = RAIZ / "docs" / "index.html"                # GitHub Pages publica la carpeta /docs
-STREAMLIT_URL = os.environ.get("STREAMLIT_URL", "https://TU-APP.streamlit.app")   
-FECHA_DATOS = "9 de Septiembre de 2026"   
-
+STREAMLIT_URL = os.environ.get("STREAMLIT_URL", "https://TU-APP.streamlit.app")   # <- poner la URL real
+FECHA_DATOS = "COMPLETAR: fecha del corte del CSV"   # <- poner la fecha del corte que bajó el pipeline
 N_PUNTOS = 20_000                                    # canciones que se dibujan en «Explorá» (sorteo con semilla 42)
 SEMILLA = 42
 
@@ -86,6 +87,8 @@ meta = json.loads((ART / "metadatos.json").read_text(encoding="utf-8"))
 pred = pd.read_csv(ART / "predicciones.csv.gz")
 reporte = pd.read_csv(ART / "reporte_clases.csv", index_col=0)
 confusiones = pd.read_csv(ART / "confusiones.csv")
+FAM = json.loads((FAMILIAS / "genreml_mapas_familias.json").read_text(encoding="utf-8"))["mapas"][MAPA_K10]   # género -> familia (k = 10)
+fam_cv = pd.read_csv(FAMILIAS / "genreml_familias_cv.csv")                                                 # validación cruzada de las familias
 
 N_GEN = df.track_genre.nunique()
 conteo = df.track_genre.value_counts()
@@ -108,8 +111,10 @@ eta_ts = float(eta.loc[eta.columna == "time_signature", "eta2"].iloc[0])
 
 ex = df[["track_id", "acousticness", "energy", "valence"]].merge(pred, on="track_id")
 ex["resultado"] = np.where(ex.genero == ex.pred1, "Acertó", "Se equivocó")
+ex["familia_real"] = ex.genero.map(FAM).map(etiqueta_familia)       # familia del género verdadero
+ex["familia_pred"] = ex.pred1.map(FAM).map(etiqueta_familia)        # familia del género que dijo el modelo
 ex = ex.sample(N_PUNTOS, random_state=SEMILLA)[
-    ["genero", "acousticness", "energy", "valence", "resultado", "pred1", "pred2", "pred3", "p1", "particion"]]
+    ["genero", "familia_real", "familia_pred", "acousticness", "energy", "valence", "resultado", "pred1", "pred2", "pred3", "p1", "particion"]]
 
 # ---------------------------------------------------------------- gráficos (Altair)
 alt.data_transformers.disable_max_rows()
@@ -200,10 +205,12 @@ def g_topk():
 
 def g_explora():
     """Copa · panorama de canciones (acústica × energía), coloreadas por si el modelo acertó.
-    Tres controles tocan el filtro: género real, resultado del modelo y positividad mínima."""
+    Cuatro controles tocan el filtro: género real, familia real, resultado del modelo y positividad mínima."""
     generos = ["Todos"] + sorted(ex.genero.unique())
     p_gen = alt.param(name="genero_sel", value="Todos", bind=alt.binding_select(
         options=generos, name="Género real: ", element="#c-explora"))
+    p_fam = alt.param(name="familia_sel", value="Todas", bind=alt.binding_select(
+        options=["Todas"] + sorted(ex.familia_real.unique()), name="Familia real: ", element="#c-explora"))
     p_res = alt.param(name="resultado_sel", value="Todas", bind=alt.binding_radio(
         options=["Todas", "Acertó", "Se equivocó"], name="Modelo: ", element="#c-explora"))
     p_val = alt.param(name="valencia_min", value=0, bind=alt.binding_range(
@@ -215,11 +222,13 @@ def g_explora():
                         legend=alt.Legend(title="El modelo", orient="bottom")),
         tooltip=[alt.Tooltip("genero:N", title="Género real"), alt.Tooltip("pred1:N", title="Modelo dice (1.º)"),
                  alt.Tooltip("p1:Q", title="Probabilidad", format=".0%"), alt.Tooltip("pred2:N", title="2.º"),
-                 alt.Tooltip("pred3:N", title="3.º"), alt.Tooltip("resultado:N", title="Resultado"),
+                 alt.Tooltip("pred3:N", title="3.º"), alt.Tooltip("familia_real:N", title="Familia real"), alt.Tooltip("familia_pred:N", title="Familia del 1.º"),
+                 alt.Tooltip("resultado:N", title="Resultado"),
                  alt.Tooltip("particion:N", title="Partición"), alt.Tooltip("acousticness:Q", title="Acústica", format=".2f"),
                  alt.Tooltip("energy:Q", title="Energía", format=".2f"), alt.Tooltip("valence:Q", title="Positividad", format=".2f")]
-    ).add_params(p_gen, p_res, p_val).transform_filter(
+    ).add_params(p_gen, p_fam, p_res, p_val).transform_filter(
         f"({p_gen.name} == 'Todos' || datum.genero == {p_gen.name}) && "
+        f"({p_fam.name} == 'Todas' || datum.familia_real == {p_fam.name}) && "
         f"({p_res.name} == 'Todas' || datum.resultado == {p_res.name}) && datum.valence >= {p_val.name}"
     ).properties(width=760, height=460)
 
@@ -251,6 +260,28 @@ t_gen = tabla(pd.DataFrame({"Mejores (F1)": [f"{g} ({es(v, 2)})" for g, v in rep
                             "Peores (F1)": [f"{g} ({es(v, 2)})" for g, v in rep["f1-score"].tail(8)[::-1].items()]}))
 t_perm = tabla(pd.DataFrame([[c, es(v, 4)] for c, v in PERMUTACION], columns=["Columna", "Caída del F1 macro al mezclarla (test)"]))
 imp = pd.Series(meta["importancia_impureza"]).sort_values(ascending=False).head(6)
+def _num(x):
+    return "—" if pd.isna(x) else es(float(x), 3)
+
+
+def _fila_cv(objetivo, modo, nombre):
+    r = fam_cv[(fam_cv.Objetivo == objetivo) & fam_cv.Modo.str.startswith(modo)].iloc[0]
+    return [nombre, int(r.Clases), _num(r.Accuracy), _num(r["Accuracy piso"]), _num(r.Kappa), _num(r["Top-2"]), _num(r["Top-3"])]
+
+
+t_fam_cv = tabla(pd.DataFrame([
+    _fila_cv("Géneros (113)", "directo", "113 géneros (el objetivo)"), _fila_cv("k-means k=2 (silhouette)", "jer", "2 familias"),
+    _fila_cv("k-means k=3", "jer", "3 familias"), _fila_cv(MAPA_K10, "jer", "10 familias (las de la página)"),
+    _fila_cv("k-means k=20", "jer", "20 familias"), _fila_cv("Manual 20", "jer", "20 familias armadas a mano")],
+    columns=["Agrupamiento", "Clases", "Accuracy", "Piso", "κ", "Top-2", "Top-3"]))
+_por_fam = {}
+for _g, _c in FAM.items():
+    _por_fam.setdefault(_c, []).append(_g)
+t_fam_lista = tabla(pd.DataFrame(
+    [[etiqueta_familia(c), c, len(gs), ", ".join(sorted(gs)[:6]) + ("…" if len(gs) > 6 else "")]
+     for c, gs in sorted(_por_fam.items(), key=lambda kv: -len(kv[1]))], columns=["Familia", "Código", "Géneros", "Algunos géneros"]))
+_k10 = fam_cv[fam_cv.Objetivo == MAPA_K10]
+F_JER, F_DIR = _k10[_k10.Modo.str.startswith("jer")].iloc[0], _k10[_k10.Modo == "directo"].iloc[0]
 t_imp = tabla(pd.DataFrame({"Columna (tras el preprocesamiento)": imp.index, "Importancia por impureza": [es(v, 3) for v in imp]}))
 
 COMO_DATOS = f"""
@@ -307,6 +338,19 @@ de audio extrema; los peores son etiquetas que no son sonoras.</p>{t_conf}{t_gen
 <h4>En qué se apoya</h4>
 <p>Mezclando una columna a la vez en el test, la que más hace caer el F1 es <code>instrumentalness</code>. Las columnas que parecen
 redundantes (energía, volumen) se reparten el aporte: una importancia baja no prueba que la columna no sirva.</p>{t_perm}{t_imp}
+<h4>Las familias: una capa para leer mejor el resultado</h4>
+<p>El objetivo no cambia: se predice el género y se mide con F1 macro y top-k. Pero muchos errores son entre géneros que suenan igual, así que la
+página agrupa los {N_GEN} géneros en 10 familias, las de la Parte 10 del notebook: k-means sobre el perfil medio de audio de cada género, calculado
+sólo con el entrenamiento. Se agrupan <strong>géneros</strong> y no canciones: agrupar canciones da un objetivo que es función de las mismas columnas, y
+cualquier clasificador lo aprende casi perfecto sin decir nada sobre géneros.</p>
+<p>La app no entrena un segundo modelo: la probabilidad de cada familia es la suma de las probabilidades de sus géneros. En validación cruzada la
+familia más probable acierta el {F_JER.Accuracy * 100:.0f} % de las canciones (piso: {F_JER["Accuracy piso"] * 100:.0f} %), con κ de {es(F_JER.Kappa, 2)}; la familia
+correcta está entre las dos primeras en el {F_JER["Top-2"] * 100:.0f} % y entre las tres primeras en el {F_JER["Top-3"] * 100:.0f} %. Entrenar directo con la
+familia como objetivo da prácticamente lo mismo (accuracy {es(F_DIR.Accuracy, 3)} contra {es(F_JER.Accuracy, 3)}), así que no hace falta un modelo nuevo.</p>{t_fam_cv}
+<p>Las familias no son grupos separados sino un degradé: el silhouette elige k = 2 (Parte 10.3) y se usa k = 10 porque es la granularidad más útil
+para leer, no porque el silhouette la elija. Agrupan por cómo suena (energía, acústica, bailabilidad), no por tradición o mercado, así que mezclan
+géneros que una persona separaría. DBSCAN (<code>min_samples</code> = 4, <code>eps</code> = percentil 90 de la distancia de cada género a su cuarto vecino) se
+usó para ver qué géneros no se parecen a ninguno; en k-means eso se nota en que <code>comedy</code> termina solo en su familia.</p>{t_fam_lista}
 <h4>Por qué «Probá el modelo» corre en Streamlit</h4>
 <p>Un bosque de 100 árboles sin límite de profundidad y con {N_GEN} clases no se puede escribir como una fórmula dentro de una página.
 La alternativa que sí entra en el navegador es la regresión logística (F1 macro 0,1458 ± 0,0031), que queda lejos del
@@ -350,7 +394,7 @@ code{font-size:.9em;background:#efede8;padding:1px 5px;border-radius:4px}
 .controles{display:flex;flex-wrap:wrap;gap:8px 22px;margin:18px 0 0;font-size:15px;padding:12px 16px;background:var(--suave);border-radius:8px}
 .vega-bind{display:flex;align-items:center;gap:6px} .vega-bind-name{font-weight:600} .vega-bind select{font-size:15px;padding:4px 6px;max-width:260px}
 .vega-bind-radio label{margin-right:10px} .vega-bind input[type=range]{accent-color:var(--copa)}
-iframe{width:100%;height:880px;border:1px solid var(--linea);border-radius:8px;background:#fff}
+iframe{width:100%;height:1250px;border:1px solid var(--linea);border-radius:8px;background:#fff}
 footer{max-width:960px;margin:0 auto;padding:30px 0;color:var(--gris);font-size:14px}
 @media (max-width:860px){nav{display:none}main{margin-left:0;padding:0 16px 60px}.nums{grid-template-columns:1fr}h1{font-size:32px}}
 </style>
@@ -398,15 +442,15 @@ Pero un solo intento castiga cosas que el audio no resuelve: dándole tres, el a
 <section id="explora"><p class="etapa copa">Tu turno · Explorá</p>
 <h2>$n_puntos canciones ubicadas por lo acústicas y lo enérgicas que son</h2>
 <p>Empezá por el panorama: casi todo es una sola nube y los géneros se mezclan, que es justo lo que le cuesta al modelo.
-Después filtrá por un género, por el resultado del modelo o por la positividad mínima, y pasá el mouse por una canción para ver qué dijo
-el modelo. Para las canciones de entrenamiento la respuesta sale de la validación cruzada: la dio un modelo que no la había visto.</p>
+Después filtrá por género, por familia, por el resultado del modelo o por la positividad mínima, y pasá el mouse por una canción para ver qué dijo
+el modelo y de qué familia es el género que eligió: así se ve si el error fue dentro de la familia o entre familias distintas. Para las canciones de entrenamiento la respuesta sale de la validación cruzada: la dio un modelo que no la había visto.</p>
 <div class="controles" id="c-explora"></div><div class="grafico" id="g-explora"></div>
 <p class="nota">Se dibuja un sorteo de $n_puntos de las $n_total canciones (semilla 42).</p></section>
 
 <section id="proba"><p class="etapa copa">Tu turno · Probá el modelo</p>
 <h2>Armá una canción y mirá qué género le daría el modelo</h2>
 <p>Cada deslizador va del mínimo al máximo que vio el entrenamiento, así que no se puede cargar un valor desconocido. El modelo corre
-en Streamlit y devuelve las cinco probabilidades más altas.
+en Streamlit y devuelve los cinco géneros más probables y la familia más probable.
 <a href="$url" target="_blank" rel="noopener">Abrir en otra pestaña</a>.</p>
 <iframe src="$url/?embed=true" title="Probá el modelo" loading="lazy"></iframe></section>
 <footer>Ciencia de Datos · UTN FRM · 2026 · Grupo 5K10-02 · Datos: $fecha.</footer>
@@ -424,7 +468,7 @@ document.querySelectorAll("section").forEach(s => obs.observe(s));
 </script></body></html>""")
 
 pagina = PAGINA.substitute(
-    oracion=oracion, n_acc=f"{acc * 100:.0f}", n_top3=f"{top3 * 100:.0f}", n_f1=es(f), n_piso=es(PISO_F1, 4),
+    oracion=oracion, n_acc=f"{acc * 100:.0f}", n_top3=f"{top3 * 100:.0f}", n_f1=es(f1), n_piso=es(PISO_F1, 4),
     n_test=miles(meta["n_test"]), n_total=miles(len(df)), n_gen=N_GEN, n_med=f"{conteo.median():.0f}", n_puntos=miles(N_PUNTOS),
     titulo_hallazgo=f"Los géneros se distinguen sobre todo por {lista(mejores)}; el compás explica apenas el {eta_ts * 100:.0f} % de la variación",
     como_datos=COMO_DATOS, como_hallazgos=COMO_HALLAZGOS, como_modelo=COMO_MODELO,

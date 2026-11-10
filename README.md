@@ -10,6 +10,7 @@ Cadena completa: **pipeline** (Entrega 1) → **análisis** (Entrega 2) → **mo
 | Análisis | `entrega2_hipotesis.ipynb` | Perfil del dataset y cuatro hipótesis (H1–H4). |
 | Modelo | `entrega3_modelado.ipynb` | Compara seis familias; elige un Random Forest. |
 | Reproducción del modelo | `entrenar.py` + `bosque_compacto.py` | Mismo modelo y misma semilla (42) que la Entrega 3; deja todo en `artefactos/`. |
+| Familias | `familias/` | Las 10 familias de géneros de la Entrega 3 (k-means k = 10): `genreml_mapas_familias.json` y `genreml_familias_cv.csv`. Son una capa para leer mejor el resultado; el objetivo sigue siendo el género. |
 | Página | `build_app.py` → `docs/index.html` | El tallo y la exploración, con gráficos de Altair. |
 | Probá el modelo | `app_streamlit.py` + `modelo_app.py` | Streamlit: el usuario arma una canción y ve las probabilidades. |
 
@@ -40,6 +41,7 @@ pip install -r requirements.txt
 ## Si los datos se actualizan
 
 Reemplazá el CSV, borrá la carpeta `artefactos/` y corré de nuevo `python entrenar.py` y `python build_app.py`.
+Las familias (`familias/`) salen del notebook de la Entrega 3: si cambian los datos, hay que volver a correrlo y reemplazar esos dos archivos.
 Los números de la página (género más grande, η², test, importancias por impureza) se recalculan solos.
 Las tablas de comparación de familias, ablación, grilla y permutación son salidas del notebook de la Entrega 3 y están copiadas en
 las constantes de `build_app.py`; si se vuelve a correr el notebook con otros datos, hay que actualizarlas.
@@ -51,6 +53,7 @@ las constantes de `build_app.py`; si se vuelve a correr el notebook con otros da
 
 ## Decisiones de modelado que conviene saber
 
+* **Familias:** no hay un segundo modelo. La probabilidad de una familia es la suma de las probabilidades de sus géneros (`probabilidades_familia` en `modelo_app.py`); es el modo «jerárquico» del notebook. La familia `K10-05` no recibió nombre en el notebook: se le puede poner uno en `NOMBRES_FAMILIA` de `modelo_app.py`.
 * **Modelo:** Random Forest de 100 árboles, sin `time_signature`, `min_samples_leaf=2`, `class_weight="balanced_subsample"`, sin límite de profundidad.
 * **Métrica:** F1 macro (pesa igual a los 113 géneros). Piso: contestar siempre el género más frecuente.
 * **Validación:** `StratifiedGroupKFold` de 5 pedazos, agrupando el audio idéntico; test externo del 20 %, medido una vez.
@@ -67,6 +70,7 @@ las constantes de `build_app.py`; si se vuelve a correr el notebook con otros da
 ├── build_app.py            ├── docs/index.html          (lo genera build_app.py)
 ├── entrenar.py             ├── artefactos/              (lo genera entrenar.py)
 ├── bosque_compacto.py      ├── genreML_tracks_latest.csv
-├── modelo_app.py           ├── entrega1_pipeline.py · entrega2_hipotesis.ipynb · entrega3_modelado.ipynb
-├── app_streamlit.py        └── requirements.txt
+├── modelo_app.py           ├── familias/                (del notebook de la Entrega 3)
+├── app_streamlit.py        ├── entrega1_pipeline.py · entrega2_hipotesis.ipynb · entrega3_modelado.ipynb
+└── requirements.txt
 ```

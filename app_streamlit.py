@@ -4,7 +4,7 @@ import altair as alt
 import pandas as pd
 import streamlit as st
 
-from modelo_app import ModeloGeneros
+from modelo_app import ModeloGeneros, etiqueta_familia
 
 AZUL, GRIS = "#2a78d6", "#b9bcc2"          # mismos colores que la página: azul = lo que el modelo elige
 NOTAS = ["Do", "Do♯", "Re", "Re♯", "Mi", "Fa", "Fa♯", "Sol", "Sol♯", "La", "La♯", "Si"]
@@ -81,3 +81,22 @@ with der:
     st.altair_chart((barras + etiquetas).properties(height=230), use_container_width=True)
     st.caption("Las probabilidades salen del promedio de los 100 árboles del bosque. El modelo recibe las mismas 12 columnas "
                "que en el notebook (sin time_signature) y el mismo preprocesamiento.")
+
+    # ---- familias: la misma predicción, leída por grupos de géneros que suenan parecido
+    st.divider()
+    fam = pd.Series(m.probabilidades_familia(p.reindex(m.clases).to_numpy()),
+                    index=[etiqueta_familia(c) for c in m.codigos_familia]).sort_values(ascending=False)
+    fam = fam.rename_axis("familia").reset_index(name="probabilidad")
+    fam["posicion"] = ["1.º"] + [""] * (len(fam) - 1)
+    r = m.resumen_familias()
+    st.subheader(f"Familia más probable: {fam.familia[0]} ({fam.probabilidad[0]:.0%})")
+    st.write(f"Las familias agrupan géneros que suenan parecido (k-means, k = 10). La probabilidad de cada una es la suma de la de sus "
+             f"géneros: no es otro modelo. En validación cruzada la familia más probable acierta el {r['accuracy']:.0%} de las canciones "
+             f"(el piso, contestar siempre la familia más grande, es {r['piso']:.0%}).")
+    barras_f = alt.Chart(fam).mark_bar(cornerRadiusEnd=4).encode(
+        y=alt.Y("familia:N", sort=fam.familia.tolist(), title=None),
+        x=alt.X("probabilidad:Q", axis=alt.Axis(format="%"), title="Probabilidad de la familia"),
+        color=alt.condition(alt.datum.posicion == "1.º", alt.value(AZUL), alt.value(GRIS)),
+        tooltip=[alt.Tooltip("familia:N", title="Familia"), alt.Tooltip("probabilidad:Q", title="Probabilidad", format=".1%")])
+    etiquetas_f = barras_f.mark_text(align="left", dx=4).encode(text=alt.Text("probabilidad:Q", format=".0%"), color=alt.value("#1a1a1a"))
+    st.altair_chart((barras_f + etiquetas_f).properties(height=300), use_container_width=True)
