@@ -85,7 +85,7 @@ notebook: hay que volver a correrlo y reemplazar esos dos archivos.
 
 ## Decisiones de modelado que conviene saber
 
-* **Familias:** no hay un segundo modelo. La probabilidad de una familia es la suma de las probabilidades de sus géneros (`probabilidades_familia` en `modelo_app.py`); es el modo «jerárquico» del notebook. La familia `K10-05` no recibió nombre en el notebook: se le puede poner uno en `NOMBRES_FAMILIA` de `modelo_app.py`.
+* **Familias:** no hay un segundo modelo. La probabilidad de una familia es la suma de las probabilidades de sus géneros (`probabilidades_familia` en `modelo_app.py`); es el modo «jerárquico» del notebook.
 * **Modelo:** Random Forest de 100 árboles, sin `time_signature`, `min_samples_leaf=2`, `class_weight="balanced_subsample"`, sin límite de profundidad.
 * **Métrica:** F1 macro (pesa igual a los 113 géneros). Piso: contestar siempre el género más frecuente.
 * **Validación:** `StratifiedGroupKFold` de 5 pedazos, agrupando el audio idéntico; test externo del 20 %, medido una vez.
